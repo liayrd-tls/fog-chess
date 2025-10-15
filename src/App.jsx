@@ -1,28 +1,91 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
+import Lobby from './Lobby';
+import { useMultiplayer } from './useMultiplayer';
 import {
   initializeBoard,
   getPossibleMoves,
   getVisibleSquares,
-  makeMove,
+  makeMove as makeChessMove,
   getPieceSymbol,
   COLORS
 } from './chessLogic';
 
 function App() {
+  // Game type: null (lobby), 'local', or 'multiplayer'
+  const [gameType, setGameType] = useState(null);
+
+  // Local game state
   const [board, setBoard] = useState(initializeBoard());
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [currentPlayer, setCurrentPlayer] = useState(COLORS.WHITE);
   const [gameMode, setGameMode] = useState('casual');
   const [possibleMoves, setPossibleMoves] = useState([]);
 
+  // Multiplayer hook
+  const multiplayer = useMultiplayer();
+
+  // Get current game state based on game type
+  const activeBoard = gameType === 'multiplayer' && multiplayer.gameState
+    ? multiplayer.gameState.board
+    : board;
+
+  const activeCurrentPlayer = gameType === 'multiplayer' && multiplayer.gameState
+    ? multiplayer.gameState.currentPlayer
+    : currentPlayer;
+
+  const activeGameMode = gameType === 'multiplayer' && multiplayer.gameState
+    ? multiplayer.gameState.gameMode
+    : gameMode;
+
+  // Start local game
+  const handlePlayLocal = () => {
+    setGameType('local');
+    setBoard(initializeBoard());
+    setCurrentPlayer(COLORS.WHITE);
+    setGameMode('casual');
+  };
+
+  // Create multiplayer room
+  const handleCreateRoom = async (mode) => {
+    const roomId = await multiplayer.createRoom(mode);
+    if (roomId) {
+      setGameType('multiplayer');
+    }
+  };
+
+  // Join multiplayer room
+  const handleJoinRoom = async (roomId) => {
+    const success = await multiplayer.joinRoom(roomId);
+    if (success) {
+      setGameType('multiplayer');
+    }
+  };
+
+  // Leave game and return to lobby
+  const handleLeaveGame = () => {
+    setGameType(null);
+    setSelectedSquare(null);
+    setPossibleMoves([]);
+    if (gameType === 'multiplayer') {
+      multiplayer.leaveRoom();
+    }
+  };
+
+  // Handle square click
   const handleSquareClick = (row, col) => {
-    const piece = board[row][col];
+    const piece = activeBoard[row][col];
+
+    // In multiplayer, only allow moves if it's your turn
+    if (gameType === 'multiplayer') {
+      if (activeCurrentPlayer !== multiplayer.playerColor) {
+        return; // Not your turn
+      }
+    }
 
     // If a square is already selected
     if (selectedSquare) {
       const [selectedRow, selectedCol] = selectedSquare;
-      const selectedPiece = board[selectedRow][selectedCol];
 
       // Check if clicked square is a valid move
       const isValidMove = possibleMoves.some(
@@ -31,15 +94,21 @@ function App() {
 
       if (isValidMove) {
         // Make the move
-        const newBoard = makeMove(board, selectedRow, selectedCol, row, col);
-        setBoard(newBoard);
-        setCurrentPlayer(currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+        const newBoard = makeChessMove(activeBoard, selectedRow, selectedCol, row, col);
+
+        if (gameType === 'multiplayer') {
+          multiplayer.makeMove(newBoard, selectedRow, selectedCol, row, col);
+        } else {
+          setBoard(newBoard);
+          setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+        }
+
         setSelectedSquare(null);
         setPossibleMoves([]);
-      } else if (piece && piece.color === currentPlayer) {
+      } else if (piece && piece.color === activeCurrentPlayer) {
         // Select a different piece of the same color
         setSelectedSquare([row, col]);
-        setPossibleMoves(getPossibleMoves(board, row, col));
+        setPossibleMoves(getPossibleMoves(activeBoard, row, col));
       } else {
         // Deselect
         setSelectedSquare(null);
@@ -47,21 +116,58 @@ function App() {
       }
     } else {
       // No square selected, try to select this square
-      if (piece && piece.color === currentPlayer) {
+      if (piece && piece.color === activeCurrentPlayer) {
         setSelectedSquare([row, col]);
-        setPossibleMoves(getPossibleMoves(board, row, col));
+        setPossibleMoves(getPossibleMoves(activeBoard, row, col));
       }
     }
   };
 
-  const resetGame = () => {
-    setBoard(initializeBoard());
+  // Reset game
+  const handleResetGame = () => {
+    if (gameType === 'multiplayer') {
+      multiplayer.resetGame();
+    } else {
+      setBoard(initializeBoard());
+      setCurrentPlayer(COLORS.WHITE);
+    }
     setSelectedSquare(null);
-    setCurrentPlayer(COLORS.WHITE);
     setPossibleMoves([]);
   };
 
-  const visibleSquares = getVisibleSquares(board, currentPlayer, gameMode);
+  // Change game mode
+  const handleChangeMode = (mode) => {
+    if (gameType === 'multiplayer') {
+      // Only room creator (white player) can change mode
+      if (multiplayer.playerColor === COLORS.WHITE) {
+        multiplayer.changeGameMode(mode);
+      }
+    } else {
+      setGameMode(mode);
+    }
+  };
+
+  // Clear selection when game state changes in multiplayer
+  useEffect(() => {
+    if (gameType === 'multiplayer' && multiplayer.gameState) {
+      setSelectedSquare(null);
+      setPossibleMoves([]);
+    }
+  }, [gameType, multiplayer.gameState]);
+
+  // Show lobby if no game is active
+  if (!gameType) {
+    return (
+      <Lobby
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
+        onPlayLocal={handlePlayLocal}
+        error={multiplayer.error}
+      />
+    );
+  }
+
+  const visibleSquares = getVisibleSquares(activeBoard, activeCurrentPlayer, activeGameMode);
 
   const isSquareVisible = (row, col) => {
     return visibleSquares.has(`${row},${col}`);
@@ -75,28 +181,57 @@ function App() {
     return possibleMoves.some(([moveRow, moveCol]) => moveRow === row && moveCol === col);
   };
 
+  const isMyTurn = gameType !== 'multiplayer' || activeCurrentPlayer === multiplayer.playerColor;
+
   return (
     <div className="app">
       <div className="container">
         <h1>Fog Chess</h1>
 
+        {gameType === 'multiplayer' && (
+          <div className="multiplayer-info">
+            <div className="room-info">
+              <span className="label">Room:</span>
+              <span className="room-code">{multiplayer.roomId}</span>
+              <button
+                className="copy-btn"
+                onClick={() => navigator.clipboard.writeText(multiplayer.roomId)}
+              >
+                Copy
+              </button>
+            </div>
+            <div className="player-info">
+              <span className="label">You are:</span>
+              <span className={`player-color ${multiplayer.playerColor}`}>
+                {multiplayer.playerColor === COLORS.WHITE ? '○' : '●'} {multiplayer.playerColor}
+              </span>
+              {!multiplayer.opponentConnected && (
+                <span className="waiting">Waiting for opponent...</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="controls">
           <div className="mode-selector">
             <button
-              className={gameMode === 'casual' ? 'active' : ''}
-              onClick={() => setGameMode('casual')}
+              className={activeGameMode === 'casual' ? 'active' : ''}
+              onClick={() => handleChangeMode('casual')}
+              disabled={gameType === 'multiplayer' && multiplayer.playerColor !== COLORS.WHITE}
             >
               Casual
             </button>
             <button
-              className={gameMode === 'fog' ? 'active' : ''}
-              onClick={() => setGameMode('fog')}
+              className={activeGameMode === 'fog' ? 'active' : ''}
+              onClick={() => handleChangeMode('fog')}
+              disabled={gameType === 'multiplayer' && multiplayer.playerColor !== COLORS.WHITE}
             >
               Fog (1sq)
             </button>
             <button
-              className={gameMode === 'movement' ? 'active' : ''}
-              onClick={() => setGameMode('movement')}
+              className={activeGameMode === 'movement' ? 'active' : ''}
+              onClick={() => handleChangeMode('movement')}
+              disabled={gameType === 'multiplayer' && multiplayer.playerColor !== COLORS.WHITE}
             >
               Movement
             </button>
@@ -104,16 +239,24 @@ function App() {
 
           <div className="game-info">
             <span className="current-player">
-              {currentPlayer === COLORS.WHITE ? '○' : '●'} {currentPlayer}
+              {activeCurrentPlayer === COLORS.WHITE ? '○' : '●'} {activeCurrentPlayer}
+              {gameType === 'multiplayer' && (
+                <span className={`turn-indicator ${isMyTurn ? 'your-turn' : ''}`}>
+                  {isMyTurn ? ' (Your turn)' : ' (Opponent)'}
+                </span>
+              )}
             </span>
-            <button onClick={resetGame} className="reset-btn">
+            <button onClick={handleResetGame} className="reset-btn">
               Reset
+            </button>
+            <button onClick={handleLeaveGame} className="leave-btn">
+              Leave
             </button>
           </div>
         </div>
 
         <div className="board">
-          {board.map((row, rowIndex) => (
+          {activeBoard.map((row, rowIndex) => (
             <div key={rowIndex} className="board-row">
               {row.map((piece, colIndex) => {
                 const isVisible = isSquareVisible(rowIndex, colIndex);
@@ -143,9 +286,9 @@ function App() {
         </div>
 
         <div className="mode-description">
-          {gameMode === 'casual' && <p>Standard chess - all pieces visible</p>}
-          {gameMode === 'fog' && <p>Enemy pieces hidden - only 1 square radius visible</p>}
-          {gameMode === 'movement' && <p>Visibility based on where your pieces can move</p>}
+          {activeGameMode === 'casual' && <p>Standard chess - all pieces visible</p>}
+          {activeGameMode === 'fog' && <p>Enemy pieces hidden - only 1 square radius visible</p>}
+          {activeGameMode === 'movement' && <p>Visibility based on where your pieces can move</p>}
         </div>
       </div>
     </div>
