@@ -13,6 +13,25 @@ export const COLORS = {
   BLACK: 'black'
 };
 
+// Normalize board from Firebase (fixes array serialization issues)
+export const normalizeBoard = (board) => {
+  if (!board) return initializeBoard();
+
+  const normalized = [];
+  for (let i = 0; i < 8; i++) {
+    normalized[i] = [];
+    for (let j = 0; j < 8; j++) {
+      // Check if the cell exists in the board data
+      if (board[i] && board[i][j] !== undefined && board[i][j] !== null) {
+        normalized[i][j] = board[i][j];
+      } else {
+        normalized[i][j] = null;
+      }
+    }
+  }
+  return normalized;
+};
+
 // Initialize chess board
 export const initializeBoard = () => {
   const board = Array(8).fill(null).map(() => Array(8).fill(null));
@@ -51,6 +70,7 @@ const isValidPosition = (row, col) => row >= 0 && row < 8 && col >= 0 && col < 8
 
 // Get possible moves for a piece
 export const getPossibleMoves = (board, row, col) => {
+  if (!board || !board[row]) return [];
   const piece = board[row][col];
   if (!piece) return [];
 
@@ -61,11 +81,11 @@ export const getPossibleMoves = (board, row, col) => {
   switch (type) {
     case PIECES.PAWN:
       // Forward move
-      if (isValidPosition(row + direction, col) && !board[row + direction][col]) {
+      if (isValidPosition(row + direction, col) && board[row + direction] && !board[row + direction][col]) {
         moves.push([row + direction, col]);
         // Double move from starting position
         const startRow = color === COLORS.WHITE ? 6 : 1;
-        if (row === startRow && !board[row + 2 * direction][col]) {
+        if (row === startRow && board[row + 2 * direction] && !board[row + 2 * direction][col]) {
           moves.push([row + 2 * direction, col]);
         }
       }
@@ -73,7 +93,7 @@ export const getPossibleMoves = (board, row, col) => {
       [-1, 1].forEach(colOffset => {
         const newRow = row + direction;
         const newCol = col + colOffset;
-        if (isValidPosition(newRow, newCol) && board[newRow][newCol] &&
+        if (isValidPosition(newRow, newCol) && board[newRow] && board[newRow][newCol] &&
             board[newRow][newCol].color !== color) {
           moves.push([newRow, newCol]);
         }
@@ -86,7 +106,7 @@ export const getPossibleMoves = (board, row, col) => {
         for (let i = 1; i < 8; i++) {
           const newRow = row + dRow * i;
           const newCol = col + dCol * i;
-          if (!isValidPosition(newRow, newCol)) break;
+          if (!isValidPosition(newRow, newCol) || !board[newRow]) break;
           if (board[newRow][newCol]) {
             if (board[newRow][newCol].color !== color) {
               moves.push([newRow, newCol]);
@@ -102,7 +122,7 @@ export const getPossibleMoves = (board, row, col) => {
       [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]].forEach(([dRow, dCol]) => {
         const newRow = row + dRow;
         const newCol = col + dCol;
-        if (isValidPosition(newRow, newCol) &&
+        if (isValidPosition(newRow, newCol) && board[newRow] &&
             (!board[newRow][newCol] || board[newRow][newCol].color !== color)) {
           moves.push([newRow, newCol]);
         }
@@ -115,7 +135,7 @@ export const getPossibleMoves = (board, row, col) => {
         for (let i = 1; i < 8; i++) {
           const newRow = row + dRow * i;
           const newCol = col + dCol * i;
-          if (!isValidPosition(newRow, newCol)) break;
+          if (!isValidPosition(newRow, newCol) || !board[newRow]) break;
           if (board[newRow][newCol]) {
             if (board[newRow][newCol].color !== color) {
               moves.push([newRow, newCol]);
@@ -133,7 +153,7 @@ export const getPossibleMoves = (board, row, col) => {
         for (let i = 1; i < 8; i++) {
           const newRow = row + dRow * i;
           const newCol = col + dCol * i;
-          if (!isValidPosition(newRow, newCol)) break;
+          if (!isValidPosition(newRow, newCol) || !board[newRow]) break;
           if (board[newRow][newCol]) {
             if (board[newRow][newCol].color !== color) {
               moves.push([newRow, newCol]);
@@ -149,7 +169,7 @@ export const getPossibleMoves = (board, row, col) => {
       [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([dRow, dCol]) => {
         const newRow = row + dRow;
         const newCol = col + dCol;
-        if (isValidPosition(newRow, newCol) &&
+        if (isValidPosition(newRow, newCol) && board[newRow] &&
             (!board[newRow][newCol] || board[newRow][newCol].color !== color)) {
           moves.push([newRow, newCol]);
         }
@@ -164,6 +184,8 @@ export const getPossibleMoves = (board, row, col) => {
 export const getVisibleSquares = (board, playerColor, mode) => {
   const visible = new Set();
 
+  if (!board) return visible;
+
   if (mode === 'casual') {
     // All squares visible
     for (let row = 0; row < 8; row++) {
@@ -176,6 +198,7 @@ export const getVisibleSquares = (board, playerColor, mode) => {
 
   // Find all player pieces
   for (let row = 0; row < 8; row++) {
+    if (!board[row]) continue;
     for (let col = 0; col < 8; col++) {
       const piece = board[row][col];
       if (piece && piece.color === playerColor) {
@@ -207,12 +230,31 @@ export const getVisibleSquares = (board, playerColor, mode) => {
   return visible;
 };
 
+// Sanitize board for Firebase (remove undefined values and ensure proper array structure)
+export const sanitizeBoardForFirebase = (board) => {
+  const sanitized = [];
+  for (let i = 0; i < 8; i++) {
+    sanitized[i] = [];
+    for (let j = 0; j < 8; j++) {
+      if (board[i] && board[i][j] !== undefined && board[i][j] !== null) {
+        // Keep the piece object
+        sanitized[i][j] = board[i][j];
+      } else {
+        // Explicitly set null
+        sanitized[i][j] = null;
+      }
+    }
+  }
+  // Force proper array structure by converting to JSON and back
+  return JSON.parse(JSON.stringify(sanitized));
+};
+
 // Make a move
 export const makeMove = (board, fromRow, fromCol, toRow, toCol) => {
-  const newBoard = board.map(row => [...row]);
+  const newBoard = board.map(row => row ? [...row] : Array(8).fill(null));
   newBoard[toRow][toCol] = newBoard[fromRow][fromCol];
   newBoard[fromRow][fromCol] = null;
-  return newBoard;
+  return sanitizeBoardForFirebase(newBoard);
 };
 
 // Get piece symbol for display

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ref, set, onValue, update, push, get } from 'firebase/database';
 import { database } from './firebase';
-import { initializeBoard, COLORS } from './chessLogic';
+import { initializeBoard, sanitizeBoardForFirebase, COLORS } from './chessLogic';
 
 export const useMultiplayer = () => {
   const [roomId, setRoomId] = useState(null);
@@ -26,7 +26,7 @@ export const useMultiplayer = () => {
       const newRoomId = newRoomRef.key;
 
       const initialState = {
-        board: initializeBoard(),
+        board: sanitizeBoardForFirebase(initializeBoard()),
         currentPlayer: COLORS.WHITE,
         gameMode,
         players: {
@@ -92,6 +92,23 @@ export const useMultiplayer = () => {
     const unsubscribe = onValue(roomRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
+
+        // Normalize board to ensure it's always a proper 8x8 array
+        if (data.board) {
+          const normalizedBoard = [];
+          for (let i = 0; i < 8; i++) {
+            normalizedBoard[i] = [];
+            for (let j = 0; j < 8; j++) {
+              if (data.board[i] && data.board[i][j] !== undefined) {
+                normalizedBoard[i][j] = data.board[i][j];
+              } else {
+                normalizedBoard[i][j] = null;
+              }
+            }
+          }
+          data.board = normalizedBoard;
+        }
+
         setGameState(data);
 
         // Check if opponent is connected
@@ -113,8 +130,11 @@ export const useMultiplayer = () => {
     try {
       const roomRef = ref(database, `rooms/${roomId}`);
 
+      // Sanitize board to ensure no undefined values
+      const sanitizedBoard = sanitizeBoardForFirebase(board);
+
       await update(roomRef, {
-        board,
+        board: sanitizedBoard,
         currentPlayer: gameState.currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE,
         lastMove: {
           from: [fromRow, fromCol],
@@ -138,7 +158,7 @@ export const useMultiplayer = () => {
     try {
       const roomRef = ref(database, `rooms/${roomId}`);
       await update(roomRef, {
-        board: initializeBoard(),
+        board: sanitizeBoardForFirebase(initializeBoard()),
         currentPlayer: COLORS.WHITE,
         lastMove: null
       });

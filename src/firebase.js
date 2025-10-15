@@ -1,16 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 
-// TODO: Replace with your Firebase project configuration
-// Get this from Firebase Console > Project Settings > General > Your apps > SDK setup and configuration
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAyUzyqxdlMT1qqasLGBa03SvM2eovZ2I4",
+  authDomain: "fogchess-d8115.firebaseapp.com",
+  databaseURL: "https://fogchess-d8115-default-rtdb.europe-west1.firebasedatabase.app/",
+  projectId: "fogchess-d8115",
+  storageBucket: "fogchess-d8115.firebasestorage.app",
+  messagingSenderId: "260573483785",
+  appId: "1:260573483785:web:1848280c3e9a0ebc1179d8",
+  measurementId: "G-XXGZXKVHRB"
 };
 
 // Initialize Firebase

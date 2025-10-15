@@ -4,6 +4,7 @@ import Lobby from './Lobby';
 import { useMultiplayer } from './useMultiplayer';
 import {
   initializeBoard,
+  normalizeBoard,
   getPossibleMoves,
   getVisibleSquares,
   makeMove as makeChessMove,
@@ -27,7 +28,7 @@ function App() {
 
   // Get current game state based on game type
   const activeBoard = gameType === 'multiplayer' && multiplayer.gameState
-    ? multiplayer.gameState.board
+    ? normalizeBoard(multiplayer.gameState.board)
     : board;
 
   const activeCurrentPlayer = gameType === 'multiplayer' && multiplayer.gameState
@@ -167,6 +168,18 @@ function App() {
     );
   }
 
+  // Wait for board to load in multiplayer
+  if (!activeBoard || !Array.isArray(activeBoard) || activeBoard.length !== 8) {
+    return (
+      <div className="app">
+        <div className="container">
+          <h1>Fog Chess</h1>
+          <p>Loading game...</p>
+        </div>
+      </div>
+    );
+  }
+
   const visibleSquares = getVisibleSquares(activeBoard, activeCurrentPlayer, activeGameMode);
 
   const isSquareVisible = (row, col) => {
@@ -182,6 +195,20 @@ function App() {
   };
 
   const isMyTurn = gameType !== 'multiplayer' || activeCurrentPlayer === multiplayer.playerColor;
+
+  // Rotate board for black player in multiplayer
+  const shouldRotateBoard = gameType === 'multiplayer' && multiplayer.playerColor === COLORS.BLACK;
+  const displayBoard = shouldRotateBoard
+    ? [...activeBoard].reverse().map(row => [...row].reverse())
+    : activeBoard;
+
+  // Adjust coordinates for rotated board
+  const getActualCoordinates = (row, col) => {
+    if (shouldRotateBoard) {
+      return [7 - row, 7 - col];
+    }
+    return [row, col];
+  };
 
   return (
     <div className="app">
@@ -256,22 +283,23 @@ function App() {
         </div>
 
         <div className="board">
-          {activeBoard.map((row, rowIndex) => (
-            <div key={rowIndex} className="board-row">
-              {row.map((piece, colIndex) => {
-                const isVisible = isSquareVisible(rowIndex, colIndex);
-                const isSelected = isSquareSelected(rowIndex, colIndex);
-                const isPossibleMove = isSquarePossibleMove(rowIndex, colIndex);
-                const isDark = (rowIndex + colIndex) % 2 === 1;
+          {displayBoard.map((row, displayRow) => (
+            <div key={displayRow} className="board-row">
+              {row && row.map((piece, displayCol) => {
+                const [actualRow, actualCol] = getActualCoordinates(displayRow, displayCol);
+                const isVisible = isSquareVisible(actualRow, actualCol);
+                const isSelected = isSquareSelected(actualRow, actualCol);
+                const isPossibleMove = isSquarePossibleMove(actualRow, actualCol);
+                const isDark = (actualRow + actualCol) % 2 === 1;
 
                 return (
                   <div
-                    key={`${rowIndex}-${colIndex}`}
+                    key={`${displayRow}-${displayCol}`}
                     className={`square ${isDark ? 'dark' : 'light'}
                       ${isSelected ? 'selected' : ''}
                       ${isPossibleMove ? 'possible-move' : ''}
                       ${!isVisible ? 'fog' : ''}`}
-                    onClick={() => handleSquareClick(rowIndex, colIndex)}
+                    onClick={() => handleSquareClick(actualRow, actualCol)}
                   >
                     {isVisible && piece && (
                       <span className={`piece ${piece.color}`}>
