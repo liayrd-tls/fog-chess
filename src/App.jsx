@@ -63,6 +63,18 @@ function App() {
     }
   };
 
+  // Auto match
+  const handleAutoMatch = async (mode) => {
+    await multiplayer.autoMatch(mode);
+  };
+
+  // When auto match finds a game, set game type
+  useEffect(() => {
+    if (multiplayer.roomId && !gameType) {
+      setGameType('multiplayer');
+    }
+  }, [multiplayer.roomId, gameType]);
+
   // Leave game and return to lobby
   const handleLeaveGame = () => {
     setGameType(null);
@@ -163,6 +175,9 @@ function App() {
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
         onPlayLocal={handlePlayLocal}
+        onAutoMatch={handleAutoMatch}
+        onCancelSearch={multiplayer.cancelSearch}
+        searching={multiplayer.searching}
         error={multiplayer.error}
       />
     );

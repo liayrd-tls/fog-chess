@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ref, set, onValue, update, push, get } from 'firebase/database';
+import { ref, set, onValue, update, push, get, remove, query, orderByChild, limitToFirst } from 'firebase/database';
 import { database } from './firebase';
 import { initializeBoard, sanitizeBoardForFirebase, COLORS } from './chessLogic';
 
@@ -10,6 +10,8 @@ export const useMultiplayer = () => {
   const [gameState, setGameState] = useState(null);
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [error, setError] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [queueMode, setQueueMode] = useState(null);
 
   useEffect(() => {
     // Generate unique player ID on mount
@@ -183,6 +185,146 @@ export const useMultiplayer = () => {
     }
   };
 
+  // Auto match - find or create match
+  const autoMatch = async (gameMode = 'casual') => {
+    if (!playerId) return;
+
+    try {
+      setError(null);
+      setSearching(true);
+      setQueueMode(gameMode);
+
+      // Check if anyone is waiting in this mode
+      const queueRef = ref(database, `queue/${gameMode}`);
+      const snapshot = await get(queueRef);
+
+      if (snapshot.exists()) {
+        // Someone is waiting! Match with them
+        const waitingPlayers = snapshot.val();
+        const waitingPlayerId = Object.keys(waitingPlayers)[0];
+        const waitingPlayerData = waitingPlayers[waitingPlayerId];
+
+        // Don't match with yourself
+        if (waitingPlayerId === playerId) {
+          // Just wait in queue
+          const myQueueRef = ref(database, `queue/${gameMode}/${playerId}`);
+          await set(myQueueRef, {
+            playerId,
+            timestamp: Date.now(),
+            gameMode
+          });
+          return;
+        }
+
+        // Create room and match
+        const roomsRef = ref(database, 'rooms');
+        const newRoomRef = push(roomsRef);
+        const newRoomId = newRoomRef.key;
+
+        const initialState = {
+          board: sanitizeBoardForFirebase(initializeBoard()),
+          currentPlayer: COLORS.WHITE,
+          gameMode,
+          players: {
+            white: waitingPlayerData.playerId,
+            black: playerId
+          },
+          createdAt: Date.now(),
+          lastMove: null
+        };
+
+        await set(newRoomRef, initialState);
+
+        // Remove both players from queue
+        await remove(ref(database, `queue/${gameMode}/${waitingPlayerId}`));
+        await remove(ref(database, `queue/${gameMode}/${playerId}`));
+
+        // Join as black player
+        setRoomId(newRoomId);
+        setPlayerColor(COLORS.BLACK);
+        setSearching(false);
+        setQueueMode(null);
+
+        return newRoomId;
+      } else {
+        // No one waiting, add to queue
+        const myQueueRef = ref(database, `queue/${gameMode}/${playerId}`);
+        await set(myQueueRef, {
+          playerId,
+          timestamp: Date.now(),
+          gameMode
+        });
+      }
+    } catch (err) {
+      setError('Failed to auto match: ' + err.message);
+      console.error('Auto match error:', err);
+      setSearching(false);
+      setQueueMode(null);
+    }
+  };
+
+  // Listen for match while in queue
+  useEffect(() => {
+    if (!searching || !playerId || !queueMode || roomId) return;
+
+    const queueRef = ref(database, `queue/${queueMode}`);
+
+    const unsubscribe = onValue(queueRef, async (snapshot) => {
+      // Check if we're still in the queue
+      const waitingPlayers = snapshot.val();
+      const playerIds = waitingPlayers ? Object.keys(waitingPlayers) : [];
+
+      // If we're not in the queue anymore, we've been matched!
+      if (!playerIds.includes(playerId)) {
+        // Look for a recently created room where we're a player
+        const roomsRef = ref(database, 'rooms');
+        const roomsSnapshot = await get(roomsRef);
+
+        if (roomsSnapshot.exists()) {
+          const rooms = roomsSnapshot.val();
+          for (const [id, room] of Object.entries(rooms)) {
+            if (
+              room.players &&
+              (room.players.white === playerId || room.players.black === playerId) &&
+              Date.now() - room.createdAt < 10000 // Created in last 10 seconds
+            ) {
+              // Found our room!
+              setRoomId(id);
+              setPlayerColor(room.players.white === playerId ? COLORS.WHITE : COLORS.BLACK);
+              setSearching(false);
+              setQueueMode(null);
+              break;
+            }
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [searching, playerId, queueMode, roomId]);
+
+  // Cleanup queue on unmount
+  useEffect(() => {
+    return () => {
+      if (playerId && queueMode) {
+        remove(ref(database, `queue/${queueMode}/${playerId}`)).catch(console.error);
+      }
+    };
+  }, [playerId, queueMode]);
+
+  // Cancel search
+  const cancelSearch = async () => {
+    if (!playerId || !queueMode) return;
+
+    try {
+      await remove(ref(database, `queue/${queueMode}/${playerId}`));
+      setSearching(false);
+      setQueueMode(null);
+    } catch (err) {
+      console.error('Cancel search error:', err);
+    }
+  };
+
   // Leave room
   const leaveRoom = () => {
     setRoomId(null);
@@ -199,8 +341,11 @@ export const useMultiplayer = () => {
     gameState,
     opponentConnected,
     error,
+    searching,
     createRoom,
     joinRoom,
+    autoMatch,
+    cancelSearch,
     makeMove,
     resetGame,
     changeGameMode,
