@@ -92,38 +92,60 @@ export const useMultiplayer = () => {
     const roomRef = ref(database, `rooms/${roomId}`);
 
     const unsubscribe = onValue(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
+      if (!snapshot.exists()) {
+        // Room was deleted - opponent left
+        setError('Opponent left the game');
+        setRoomId(null);
+        setPlayerColor(null);
+        setGameState(null);
+        setOpponentConnected(false);
+        return;
+      }
 
-        // Normalize board to ensure it's always a proper 8x8 array
-        if (data.board) {
-          const normalizedBoard = [];
-          for (let i = 0; i < 8; i++) {
-            normalizedBoard[i] = [];
-            for (let j = 0; j < 8; j++) {
-              if (data.board[i] && data.board[i][j] !== undefined) {
-                normalizedBoard[i][j] = data.board[i][j];
-              } else {
-                normalizedBoard[i][j] = null;
-              }
+      const data = snapshot.val();
+
+      // Normalize board to ensure it's always a proper 8x8 array
+      if (data.board) {
+        const normalizedBoard = [];
+        for (let i = 0; i < 8; i++) {
+          normalizedBoard[i] = [];
+          for (let j = 0; j < 8; j++) {
+            if (data.board[i] && data.board[i][j] !== undefined) {
+              normalizedBoard[i][j] = data.board[i][j];
+            } else {
+              normalizedBoard[i][j] = null;
             }
           }
-          data.board = normalizedBoard;
         }
+        data.board = normalizedBoard;
+      }
 
-        setGameState(data);
+      setGameState(data);
 
-        // Check if opponent is connected
-        if (playerColor === COLORS.WHITE) {
-          setOpponentConnected(!!data.players.black);
-        } else {
-          setOpponentConnected(!!data.players.white);
-        }
+      // Check if opponent is connected
+      const wasConnected = opponentConnected;
+      let nowConnected = false;
+
+      if (playerColor === COLORS.WHITE) {
+        nowConnected = !!data.players.black;
+      } else {
+        nowConnected = !!data.players.white;
+      }
+
+      setOpponentConnected(nowConnected);
+
+      // If opponent disconnected (was connected, now not)
+      if (wasConnected && !nowConnected) {
+        setError('Opponent left the game');
+        // Delete the room after a short delay
+        setTimeout(() => {
+          remove(roomRef).catch(console.error);
+        }, 1000);
       }
     });
 
     return () => unsubscribe();
-  }, [roomId, playerColor]);
+  }, [roomId, playerColor, opponentConnected]);
 
   // Make a move
   const makeMove = async (board, fromRow, fromCol, toRow, toCol) => {
@@ -326,7 +348,38 @@ export const useMultiplayer = () => {
   };
 
   // Leave room
-  const leaveRoom = () => {
+  const leaveRoom = async () => {
+    if (!roomId || !playerColor) {
+      setRoomId(null);
+      setPlayerColor(null);
+      setGameState(null);
+      setOpponentConnected(false);
+      setError(null);
+      return;
+    }
+
+    try {
+      const roomRef = ref(database, `rooms/${roomId}`);
+
+      // Remove this player from the room
+      if (playerColor === COLORS.WHITE) {
+        await update(roomRef, { 'players/white': null });
+      } else {
+        await update(roomRef, { 'players/black': null });
+      }
+
+      // Check if room is now empty and delete it
+      const snapshot = await get(roomRef);
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        if (!data.players.white && !data.players.black) {
+          await remove(roomRef);
+        }
+      }
+    } catch (err) {
+      console.error('Error leaving room:', err);
+    }
+
     setRoomId(null);
     setPlayerColor(null);
     setGameState(null);

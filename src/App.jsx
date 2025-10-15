@@ -24,6 +24,7 @@ function App() {
   const [gameMode, setGameMode] = useState('casual');
   const [possibleMoves, setPossibleMoves] = useState([]);
   const [promotionData, setPromotionData] = useState(null); // {board, fromRow, fromCol, toRow, toCol}
+  const [lastMove, setLastMove] = useState(null); // {from: [row, col], to: [row, col]}
 
   // Multiplayer hook
   const multiplayer = useMultiplayer();
@@ -40,6 +41,10 @@ function App() {
   const activeGameMode = gameType === 'multiplayer' && multiplayer.gameState
     ? multiplayer.gameState.gameMode
     : gameMode;
+
+  const activeLastMove = gameType === 'multiplayer' && multiplayer.gameState && multiplayer.gameState.lastMove
+    ? multiplayer.gameState.lastMove
+    : lastMove;
 
   // Start local game
   const handlePlayLocal = () => {
@@ -78,13 +83,14 @@ function App() {
   }, [multiplayer.roomId, gameType]);
 
   // Leave game and return to lobby
-  const handleLeaveGame = () => {
+  const handleLeaveGame = async () => {
+    if (gameType === 'multiplayer') {
+      await multiplayer.leaveRoom();
+    }
     setGameType(null);
     setSelectedSquare(null);
     setPossibleMoves([]);
-    if (gameType === 'multiplayer') {
-      multiplayer.leaveRoom();
-    }
+    setPromotionData(null);
   };
 
   // Handle square click
@@ -130,6 +136,9 @@ function App() {
           // Make the move normally
           const newBoard = makeChessMove(activeBoard, selectedRow, selectedCol, row, col);
 
+          // Track the move
+          setLastMove({ from: [selectedRow, selectedCol], to: [row, col] });
+
           if (gameType === 'multiplayer') {
             multiplayer.makeMove(newBoard, selectedRow, selectedCol, row, col);
           } else {
@@ -168,6 +177,7 @@ function App() {
     }
     setSelectedSquare(null);
     setPossibleMoves([]);
+    setLastMove(null);
   };
 
   // Change game mode
@@ -193,6 +203,9 @@ function App() {
     const movingPiece = board[fromRow][fromCol];
     newBoard[toRow][toCol] = { type: pieceType, color: movingPiece.color };
 
+    // Track the move
+    setLastMove({ from: [fromRow, fromCol], to: [toRow, toCol] });
+
     setBoard(newBoard);
     setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
     setPromotionData(null);
@@ -205,6 +218,19 @@ function App() {
       setPossibleMoves([]);
     }
   }, [gameType, multiplayer.gameState]);
+
+  // Handle opponent disconnect - kick back to lobby
+  useEffect(() => {
+    if (gameType === 'multiplayer' && multiplayer.error && multiplayer.error.includes('Opponent left')) {
+      // Give user time to see the error message, then return to lobby
+      const timer = setTimeout(() => {
+        setGameType(null);
+        setSelectedSquare(null);
+        setPossibleMoves([]);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [gameType, multiplayer.error]);
 
   // Show lobby if no game is active
   if (!gameType) {
@@ -233,7 +259,12 @@ function App() {
     );
   }
 
-  const visibleSquares = getVisibleSquares(activeBoard, activeCurrentPlayer, activeGameMode);
+  // In multiplayer, always see from your own perspective, not the current turn player
+  const visibilityPlayerColor = gameType === 'multiplayer'
+    ? multiplayer.playerColor
+    : activeCurrentPlayer;
+
+  const visibleSquares = getVisibleSquares(activeBoard, visibilityPlayerColor, activeGameMode);
 
   const isSquareVisible = (row, col) => {
     return visibleSquares.has(`${row},${col}`);
@@ -245,6 +276,12 @@ function App() {
 
   const isSquarePossibleMove = (row, col) => {
     return possibleMoves.some(([moveRow, moveCol]) => moveRow === row && moveCol === col);
+  };
+
+  const isLastMoveSquare = (row, col) => {
+    if (!activeLastMove) return false;
+    const { from, to } = activeLastMove;
+    return (from[0] === row && from[1] === col) || (to[0] === row && to[1] === col);
   };
 
   const isMyTurn = gameType !== 'multiplayer' || activeCurrentPlayer === multiplayer.playerColor;
@@ -269,54 +306,37 @@ function App() {
         <h1>Fog Chess</h1>
 
         {gameType === 'multiplayer' && (
-          <div className="multiplayer-info">
-            <div className="room-info">
-              <span className="label">Room:</span>
-              <span className="room-code">{multiplayer.roomId}</span>
-              <button
-                className="copy-btn"
-                onClick={() => navigator.clipboard.writeText(multiplayer.roomId)}
-              >
-                Copy
-              </button>
+          <>
+            <div className="multiplayer-info">
+              <div className="room-info">
+                <span className="label">Room:</span>
+                <span className="room-code">{multiplayer.roomId}</span>
+                <button
+                  className="copy-btn"
+                  onClick={() => navigator.clipboard.writeText(multiplayer.roomId)}
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="player-info">
+                <span className="label">You are:</span>
+                <span className={`player-color ${multiplayer.playerColor}`}>
+                  {multiplayer.playerColor === COLORS.WHITE ? '○' : '●'} {multiplayer.playerColor}
+                </span>
+                {!multiplayer.opponentConnected && (
+                  <span className="waiting">Waiting for opponent...</span>
+                )}
+              </div>
             </div>
-            <div className="player-info">
-              <span className="label">You are:</span>
-              <span className={`player-color ${multiplayer.playerColor}`}>
-                {multiplayer.playerColor === COLORS.WHITE ? '○' : '●'} {multiplayer.playerColor}
-              </span>
-              {!multiplayer.opponentConnected && (
-                <span className="waiting">Waiting for opponent...</span>
-              )}
-            </div>
-          </div>
+            {multiplayer.error && (
+              <div className="game-error">
+                {multiplayer.error}
+              </div>
+            )}
+          </>
         )}
 
         <div className="controls">
-          <div className="mode-selector">
-            <button
-              className={activeGameMode === 'casual' ? 'active' : ''}
-              onClick={() => handleChangeMode('casual')}
-              disabled={gameType === 'multiplayer' && multiplayer.playerColor !== COLORS.WHITE}
-            >
-              Casual
-            </button>
-            <button
-              className={activeGameMode === 'fog' ? 'active' : ''}
-              onClick={() => handleChangeMode('fog')}
-              disabled={gameType === 'multiplayer' && multiplayer.playerColor !== COLORS.WHITE}
-            >
-              Fog (1sq)
-            </button>
-            <button
-              className={activeGameMode === 'movement' ? 'active' : ''}
-              onClick={() => handleChangeMode('movement')}
-              disabled={gameType === 'multiplayer' && multiplayer.playerColor !== COLORS.WHITE}
-            >
-              Movement
-            </button>
-          </div>
-
           <div className="game-info">
             <span className="current-player">
               {activeCurrentPlayer === COLORS.WHITE ? '○' : '●'} {activeCurrentPlayer}
@@ -343,6 +363,7 @@ function App() {
                 const isVisible = isSquareVisible(actualRow, actualCol);
                 const isSelected = isSquareSelected(actualRow, actualCol);
                 const isPossibleMove = isSquarePossibleMove(actualRow, actualCol);
+                const isLastMove = isLastMoveSquare(actualRow, actualCol);
                 const isDark = (actualRow + actualCol) % 2 === 1;
 
                 return (
@@ -351,6 +372,7 @@ function App() {
                     className={`square ${isDark ? 'dark' : 'light'}
                       ${isSelected ? 'selected' : ''}
                       ${isPossibleMove ? 'possible-move' : ''}
+                      ${isLastMove ? 'last-move' : ''}
                       ${!isVisible ? 'fog' : ''}`}
                     onClick={() => handleSquareClick(actualRow, actualCol)}
                   >
