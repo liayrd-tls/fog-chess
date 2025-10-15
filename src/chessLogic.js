@@ -68,8 +68,40 @@ export const initializeBoard = () => {
 // Check if position is within board bounds
 const isValidPosition = (row, col) => row >= 0 && row < 8 && col >= 0 && col < 8;
 
-// Get possible moves for a piece
-export const getPossibleMoves = (board, row, col) => {
+// Find king position for a given color
+const findKing = (board, color) => {
+  for (let row = 0; row < 8; row++) {
+    if (!board[row]) continue;
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece && piece.type === PIECES.KING && piece.color === color) {
+        return [row, col];
+      }
+    }
+  }
+  return null;
+};
+
+// Check if a square is under attack by opponent
+const isSquareUnderAttack = (board, row, col, byColor) => {
+  // Check all opponent pieces to see if any can attack this square
+  for (let r = 0; r < 8; r++) {
+    if (!board[r]) continue;
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece && piece.color === byColor) {
+        const moves = getRawMoves(board, r, c);
+        if (moves.some(([mr, mc]) => mr === row && mc === col)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+};
+
+// Get raw moves without check validation (used internally)
+const getRawMoves = (board, row, col) => {
   if (!board || !board[row]) return [];
   const piece = board[row][col];
   if (!piece) return [];
@@ -180,6 +212,43 @@ export const getPossibleMoves = (board, row, col) => {
   return moves;
 };
 
+// Check if king is in check
+export const isInCheck = (board, color) => {
+  const kingPos = findKing(board, color);
+  if (!kingPos) return false;
+
+  const opponentColor = color === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
+  return isSquareUnderAttack(board, kingPos[0], kingPos[1], opponentColor);
+};
+
+// Test if a move is legal (doesn't leave king in check)
+const isMoveLegal = (board, fromRow, fromCol, toRow, toCol) => {
+  const piece = board[fromRow][fromCol];
+  if (!piece) return false;
+
+  // Prevent capturing king
+  const targetPiece = board[toRow][toCol];
+  if (targetPiece && targetPiece.type === PIECES.KING) {
+    return false;
+  }
+
+  // Simulate the move
+  const testBoard = board.map(row => row ? [...row] : Array(8).fill(null));
+  testBoard[toRow][toCol] = testBoard[fromRow][fromCol];
+  testBoard[fromRow][fromCol] = null;
+
+  // Check if our king is in check after this move
+  return !isInCheck(testBoard, piece.color);
+};
+
+// Get possible moves for a piece (with check validation)
+export const getPossibleMoves = (board, row, col) => {
+  const rawMoves = getRawMoves(board, row, col);
+
+  // Filter out moves that would leave king in check
+  return rawMoves.filter(([toRow, toCol]) => isMoveLegal(board, row, col, toRow, toCol));
+};
+
 // Get visible squares based on game mode
 export const getVisibleSquares = (board, playerColor, mode) => {
   const visible = new Set();
@@ -261,14 +330,14 @@ export const makeMove = (board, fromRow, fromCol, toRow, toCol) => {
 export const getPieceSymbol = (piece) => {
   if (!piece) return '';
 
-  // Use same style symbols for both colors (differentiate by CSS color)
+  // Use filled symbols for both colors (differentiate by CSS color)
   const symbols = {
-    [PIECES.KING]: '♔',
-    [PIECES.QUEEN]: '♕',
-    [PIECES.ROOK]: '♖',
-    [PIECES.BISHOP]: '♗',
-    [PIECES.KNIGHT]: '♘',
-    [PIECES.PAWN]: '♙'
+    [PIECES.KING]: '♚',
+    [PIECES.QUEEN]: '♛',
+    [PIECES.ROOK]: '♜',
+    [PIECES.BISHOP]: '♝',
+    [PIECES.KNIGHT]: '♞',
+    [PIECES.PAWN]: '♟'
   };
 
   return symbols[piece.type];

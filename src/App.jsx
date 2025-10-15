@@ -9,7 +9,8 @@ import {
   getVisibleSquares,
   makeMove as makeChessMove,
   getPieceSymbol,
-  COLORS
+  COLORS,
+  PIECES
 } from './chessLogic';
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
   const [currentPlayer, setCurrentPlayer] = useState(COLORS.WHITE);
   const [gameMode, setGameMode] = useState('casual');
   const [possibleMoves, setPossibleMoves] = useState([]);
+  const [promotionData, setPromotionData] = useState(null); // {board, fromRow, fromCol, toRow, toCol}
 
   // Multiplayer hook
   const multiplayer = useMultiplayer();
@@ -106,18 +108,38 @@ function App() {
       );
 
       if (isValidMove) {
-        // Make the move
-        const newBoard = makeChessMove(activeBoard, selectedRow, selectedCol, row, col);
+        const movingPiece = activeBoard[selectedRow][selectedCol];
 
-        if (gameType === 'multiplayer') {
-          multiplayer.makeMove(newBoard, selectedRow, selectedCol, row, col);
+        // Check for pawn promotion
+        const isPromotion = movingPiece.type === 'P' &&
+                           ((movingPiece.color === COLORS.WHITE && row === 0) ||
+                            (movingPiece.color === COLORS.BLACK && row === 7));
+
+        if (isPromotion && gameType !== 'multiplayer') {
+          // Show promotion dialog for local game
+          setPromotionData({
+            board: activeBoard,
+            fromRow: selectedRow,
+            fromCol: selectedCol,
+            toRow: row,
+            toCol: col
+          });
+          setSelectedSquare(null);
+          setPossibleMoves([]);
         } else {
-          setBoard(newBoard);
-          setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
-        }
+          // Make the move normally
+          const newBoard = makeChessMove(activeBoard, selectedRow, selectedCol, row, col);
 
-        setSelectedSquare(null);
-        setPossibleMoves([]);
+          if (gameType === 'multiplayer') {
+            multiplayer.makeMove(newBoard, selectedRow, selectedCol, row, col);
+          } else {
+            setBoard(newBoard);
+            setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+          }
+
+          setSelectedSquare(null);
+          setPossibleMoves([]);
+        }
       } else if (piece && piece.color === activeCurrentPlayer) {
         // Select a different piece of the same color
         setSelectedSquare([row, col]);
@@ -158,6 +180,22 @@ function App() {
     } else {
       setGameMode(mode);
     }
+  };
+
+  // Handle pawn promotion
+  const handlePromotion = (pieceType) => {
+    if (!promotionData) return;
+
+    const { board, fromRow, fromCol, toRow, toCol } = promotionData;
+    const newBoard = makeChessMove(board, fromRow, fromCol, toRow, toCol);
+
+    // Replace pawn with selected piece
+    const movingPiece = board[fromRow][fromCol];
+    newBoard[toRow][toCol] = { type: pieceType, color: movingPiece.color };
+
+    setBoard(newBoard);
+    setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+    setPromotionData(null);
   };
 
   // Clear selection when game state changes in multiplayer
@@ -333,6 +371,33 @@ function App() {
           {activeGameMode === 'fog' && <p>Enemy pieces hidden - only 1 square radius visible</p>}
           {activeGameMode === 'movement' && <p>Visibility based on where your pieces can move</p>}
         </div>
+
+        {/* Pawn Promotion Dialog */}
+        {promotionData && (
+          <div className="promotion-overlay">
+            <div className="promotion-dialog">
+              <h2>Promote Pawn</h2>
+              <div className="promotion-options">
+                <button className="promotion-btn" onClick={() => handlePromotion(PIECES.QUEEN)}>
+                  <span className={`piece ${activeCurrentPlayer}`}>♛</span>
+                  <span>Queen</span>
+                </button>
+                <button className="promotion-btn" onClick={() => handlePromotion(PIECES.ROOK)}>
+                  <span className={`piece ${activeCurrentPlayer}`}>♜</span>
+                  <span>Rook</span>
+                </button>
+                <button className="promotion-btn" onClick={() => handlePromotion(PIECES.BISHOP)}>
+                  <span className={`piece ${activeCurrentPlayer}`}>♝</span>
+                  <span>Bishop</span>
+                </button>
+                <button className="promotion-btn" onClick={() => handlePromotion(PIECES.KNIGHT)}>
+                  <span className={`piece ${activeCurrentPlayer}`}>♞</span>
+                  <span>Knight</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
