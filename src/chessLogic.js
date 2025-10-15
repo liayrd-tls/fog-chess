@@ -261,6 +261,7 @@ export const makeMove = (board, fromRow, fromCol, toRow, toCol) => {
 export const getPieceSymbol = (piece) => {
   if (!piece) return '';
 
+  // Use same style symbols for both colors (differentiate by CSS color)
   const symbols = {
     [PIECES.KING]: '♔',
     [PIECES.QUEEN]: '♕',
@@ -270,14 +271,5 @@ export const getPieceSymbol = (piece) => {
     [PIECES.PAWN]: '♙'
   };
 
-  const symbolsBlack = {
-    [PIECES.KING]: '♚',
-    [PIECES.QUEEN]: '♛',
-    [PIECES.ROOK]: '♜',
-    [PIECES.BISHOP]: '♝',
-    [PIECES.KNIGHT]: '♞',
-    [PIECES.PAWN]: '♟'
-  };
-
-  return piece.color === COLORS.WHITE ? symbols[piece.type] : symbolsBlack[piece.type];
+  return symbols[piece.type];
 };

@@ -191,4 +191,56 @@
   .lobby h1 {
     font-size: 2rem;
   }
+
+  .lobby-container {
+    padding: 0 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .lobby {
+    padding: 1rem;
+  }
+
+  .lobby-container {
+    gap: 1.5rem;
+  }
+
+  .lobby h1 {
+    font-size: 1.75rem;
+  }
+
+  .lobby-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .lobby-section {
+    padding: 1rem;
+  }
+
+  .lobby-section h2 {
+    font-size: 1rem;
+  }
+
+  .lobby-btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
+  }
+
+  .join-room input {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.9rem;
+  }
+
+  .mode-title {
+    font-size: 0.8rem;
+  }
+
+  .mode-desc {
+    font-size: 0.7rem;
+  }
+
+  .info-item {
+    font-size: 0.8rem;
+  }
 }
