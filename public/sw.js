@@ -19,34 +19,45 @@ self.addEventListener('install', (event) => {
 
 // Fetch event
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
+  // Only cache HTTP/HTTPS requests from same origin
+  if (event.request.url.startsWith('http') &&
+      new URL(event.request.url).origin === location.origin) {
 
-        return fetch(event.request).then(
-          (response) => {
-            // Check if valid response
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // Clone the response
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => {
+          // Cache hit - return response
+          if (response) {
             return response;
           }
-        );
-      })
-  );
+
+          return fetch(event.request).then(
+            (response) => {
+              // Check if valid response
+              if (!response || response.status !== 200 || response.type !== 'basic') {
+                return response;
+              }
+
+              // Clone the response
+              const responseToCache = response.clone();
+
+              caches.open(CACHE_NAME)
+                .then((cache) => {
+                  cache.put(event.request, responseToCache);
+                });
+
+              return response;
+            }
+          ).catch(() => {
+            // Return a basic response on fetch failure
+            return new Response('Offline', {
+              status: 503,
+              statusText: 'Service Unavailable'
+            });
+          });
+        })
+    );
+  }
 });
 
 // Activate event
