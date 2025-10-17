@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fog-chess-v1';
+/*const CACHE_NAME = 'fog-chess-v1';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -75,4 +75,4 @@ self.addEventListener('activate', (event) => {
     })
   );
   self.clients.claim();
-});
+});*/

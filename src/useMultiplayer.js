@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ref, set, onValue, update, push, get, remove, query, orderByChild, limitToFirst } from 'firebase/database';
 import { database } from './firebase';
-import { initializeBoard, sanitizeBoardForFirebase, COLORS } from './chessLogic';
+import { initializeBoard, sanitizeBoardForFirebase, initializeCastlingRights, COLORS } from './chessLogic';
 
 export const useMultiplayer = () => {
   const [roomId, setRoomId] = useState(null);
@@ -36,7 +36,9 @@ export const useMultiplayer = () => {
           black: null
         },
         createdAt: Date.now(),
-        lastMove: null
+        lastMove: null,
+        timers: { white: 600, black: 600 }, // 10 minutes each
+        castlingRights: initializeCastlingRights()
       };
 
       await set(newRoomRef, initialState);
@@ -148,7 +150,7 @@ export const useMultiplayer = () => {
   }, [roomId, playerColor, opponentConnected]);
 
   // Make a move
-  const makeMove = async (board, fromRow, fromCol, toRow, toCol) => {
+  const makeMove = async (board, fromRow, fromCol, toRow, toCol, castlingRights) => {
     if (!roomId || !gameState) return false;
 
     try {
@@ -157,7 +159,7 @@ export const useMultiplayer = () => {
       // Sanitize board to ensure no undefined values
       const sanitizedBoard = sanitizeBoardForFirebase(board);
 
-      await update(roomRef, {
+      const updateData = {
         board: sanitizedBoard,
         currentPlayer: gameState.currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE,
         lastMove: {
@@ -165,13 +167,34 @@ export const useMultiplayer = () => {
           to: [toRow, toCol],
           timestamp: Date.now()
         }
-      });
+      };
+
+      // Add castling rights if provided
+      if (castlingRights) {
+        updateData.castlingRights = castlingRights;
+      }
+
+      await update(roomRef, updateData);
 
       return true;
     } catch (err) {
       setError('Failed to make move: ' + err.message);
       console.error('Make move error:', err);
       return false;
+    }
+  };
+
+  // Update timer
+  const updateTimer = async (color, newTime) => {
+    if (!roomId) return;
+
+    try {
+      const roomRef = ref(database, `rooms/${roomId}`);
+      await update(roomRef, {
+        [`timers/${color}`]: newTime
+      });
+    } catch (err) {
+      console.error('Update timer error:', err);
     }
   };
 
@@ -184,7 +207,9 @@ export const useMultiplayer = () => {
       await update(roomRef, {
         board: sanitizeBoardForFirebase(initializeBoard()),
         currentPlayer: COLORS.WHITE,
-        lastMove: null
+        lastMove: null,
+        timers: { white: 600, black: 600 },
+        castlingRights: initializeCastlingRights()
       });
     } catch (err) {
       setError('Failed to reset game: ' + err.message);
@@ -252,7 +277,9 @@ export const useMultiplayer = () => {
             black: playerId
           },
           createdAt: Date.now(),
-          lastMove: null
+          lastMove: null,
+          timers: { white: 600, black: 600 },
+          castlingRights: initializeCastlingRights()
         };
 
         await set(newRoomRef, initialState);
@@ -402,6 +429,7 @@ export const useMultiplayer = () => {
     makeMove,
     resetGame,
     changeGameMode,
-    leaveRoom
+    leaveRoom,
+    updateTimer
   };
 };

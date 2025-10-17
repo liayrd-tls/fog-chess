@@ -3,7 +3,7 @@ import './Lobby.css';
 
 function Lobby({ onCreateRoom, onJoinRoom, onPlayLocal, onAutoMatch, onCancelSearch, searching, error }) {
   const [roomCode, setRoomCode] = useState('');
-  const [selectedMode, setSelectedMode] = useState('casual');
+  const [selectedMode, setSelectedMode] = useState('movement');
 
   const handleCreateRoom = async () => {
     await onCreateRoom(selectedMode);
