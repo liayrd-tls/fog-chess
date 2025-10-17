@@ -1,4 +1,4 @@
-import { getPieceSymbol } from '../../chessLogic';
+import { getPieceImageUrl } from '../../utils/pieceImages';
 
 function BoardSquare({
   piece,
@@ -19,9 +19,12 @@ function BoardSquare({
       onClick={onClick}
     >
       {isVisible && piece && (
-        <span className={`piece ${piece.color}`}>
-          {getPieceSymbol(piece)}
-        </span>
+        <img
+          src={getPieceImageUrl(piece)}
+          alt={`${piece.color} ${piece.type}`}
+          className="piece-image"
+          draggable="false"
+        />
       )}
     </div>
   );

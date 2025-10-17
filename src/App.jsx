@@ -20,11 +20,22 @@ import {
   getMaterialAdvantage,
   COLORS
 } from './chessLogic';
-import { GAME_TYPES } from './utils/constants';
+import { GAME_TYPES, preloadPieceImages, preloadAllSounds, playSound, SOUND_TYPES } from './utils/constants';
 
 function App() {
   // Game type: null (lobby), 'local', or 'multiplayer'
   const [gameType, setGameType] = useState(null);
+
+  // Preload piece images and sounds on mount
+  useEffect(() => {
+    preloadPieceImages().catch(err => {
+      console.warn('Failed to preload some piece images:', err);
+    });
+
+    preloadAllSounds().catch(err => {
+      console.warn('Failed to preload some sound effects:', err);
+    });
+  }, []);
 
   // Local game state
   const gameState = useGameState();
@@ -107,12 +118,14 @@ function App() {
   const handlePlayLocal = () => {
     setGameType(GAME_TYPES.LOCAL);
     gameState.resetLocalGame();
+    playSound(SOUND_TYPES.GAME_START);
   };
 
   const handleCreateRoom = async (mode) => {
     const roomId = await multiplayer.createRoom(mode);
     if (roomId) {
       setGameType(GAME_TYPES.MULTIPLAYER);
+      playSound(SOUND_TYPES.GAME_START);
     }
   };
 
@@ -120,6 +133,7 @@ function App() {
     const success = await multiplayer.joinRoom(roomId);
     if (success) {
       setGameType(GAME_TYPES.MULTIPLAYER);
+      playSound(SOUND_TYPES.GAME_START);
     }
   };
 

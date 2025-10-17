@@ -1,11 +1,12 @@
 import { PIECES } from '../../chessLogic';
+import { getPieceImageUrl } from '../../utils/pieceImages';
 
 function PromotionDialog({ currentPlayerColor, onSelectPiece }) {
   const promotionPieces = [
-    { type: PIECES.QUEEN, symbol: '♛', name: 'Queen' },
-    { type: PIECES.ROOK, symbol: '♜', name: 'Rook' },
-    { type: PIECES.BISHOP, symbol: '♝', name: 'Bishop' },
-    { type: PIECES.KNIGHT, symbol: '♞', name: 'Knight' }
+    { type: PIECES.QUEEN, name: 'Queen' },
+    { type: PIECES.ROOK, name: 'Rook' },
+    { type: PIECES.BISHOP, name: 'Bishop' },
+    { type: PIECES.KNIGHT, name: 'Knight' }
   ];
 
   return (
@@ -13,13 +14,18 @@ function PromotionDialog({ currentPlayerColor, onSelectPiece }) {
       <div className="promotion-dialog">
         <h2>Promote Pawn</h2>
         <div className="promotion-options">
-          {promotionPieces.map(({ type, symbol, name }) => (
+          {promotionPieces.map(({ type, name }) => (
             <button
               key={type}
               className="promotion-btn"
               onClick={() => onSelectPiece(type)}
             >
-              <span className={`piece ${currentPlayerColor}`}>{symbol}</span>
+              <img
+                src={getPieceImageUrl({ type, color: currentPlayerColor })}
+                alt={`${currentPlayerColor} ${name}`}
+                className="promotion-piece-image"
+                draggable="false"
+              />
               <span>{name}</span>
             </button>
           ))}

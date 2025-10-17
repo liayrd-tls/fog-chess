@@ -24,7 +24,8 @@ src/
 │   ├── useGameEnd.js        # Game end detection (checkmate/stalemate)
 │   └── useMoveHandler.js    # Move execution and validation
 ├── utils/               # Utility functions and constants
-│   └── constants.js         # Game constants and configuration
+│   ├── constants.js         # Game constants and configuration
+│   └── pieceImages.js       # Chess piece image utilities
 ├── chessLogic.js        # Core chess rules and logic
 ├── useMultiplayer.js    # Firebase multiplayer hook
 ├── App.jsx              # Main application component

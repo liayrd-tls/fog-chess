@@ -1,4 +1,4 @@
-import { getPieceSymbol } from '../../chessLogic';
+import { getPieceImageUrl } from '../../utils/pieceImages';
 
 function CapturedPiecesBar({
   capturedPieces,
@@ -21,13 +21,13 @@ function CapturedPiecesBar({
           <span className="no-captures-inline">—</span>
         ) : (
           capturedPieces.map((piece, idx) => (
-            <span
+            <img
               key={idx}
-              className="captured-piece-small"
-              style={{ color: playerColor === 'white' ? '#fff' : '#0a0a0a' }}
-            >
-              {getPieceSymbol({ type: piece, color: playerColor })}
-            </span>
+              src={getPieceImageUrl({ type: piece, color: playerColor })}
+              alt={`${playerColor} ${piece}`}
+              className="captured-piece-image"
+              draggable="false"
+            />
           ))
         )}
       </div>

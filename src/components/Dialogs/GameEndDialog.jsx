@@ -22,9 +22,7 @@ function GameEndDialog({ result, winner, onMenu, onRematch }) {
 
     return (
       <>
-        <div className="winner-icon">
-          {winner === COLORS.WHITE ? '○' : '●'}
-        </div>
+        <div className={`winner-icon winner-${winner}`}></div>
         <p>
           {winner} wins{result === GAME_END_RESULTS.TIMEOUT ? ' by timeout' : ''}!
         </p>

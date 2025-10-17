@@ -2,9 +2,12 @@ import {
   getPossibleMoves,
   makeMove as makeChessMove,
   updateCastlingRights,
+  isInCheck,
+  isCheckmate,
   COLORS,
   PIECES
 } from '../chessLogic';
+import { playMoveSound } from '../utils/soundEffects';
 
 export const useMoveHandler = ({
   gameType,
@@ -71,6 +74,22 @@ export const useMoveHandler = ({
             selectedCol
           );
 
+          // Detect move type for sound effects
+          const isCapture = activeBoard[row][col] !== null;
+          const isCastle = movingPiece.type === PIECES.KING && Math.abs(col - selectedCol) === 2;
+          const nextPlayer = activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
+          const isCheck = isInCheck(newBoard, nextPlayer);
+          const isMateCheck = isCheckmate(newBoard, nextPlayer, newCastlingRights);
+
+          // Play appropriate sound
+          playMoveSound({
+            isCapture,
+            isCastle,
+            isCheck,
+            isCheckmate: isMateCheck,
+            isPromotion: false
+          });
+
           // Track the move
           setLastMove({ from: [selectedRow, selectedCol], to: [row, col] });
 
@@ -78,7 +97,7 @@ export const useMoveHandler = ({
             makeMultiplayerMove(newBoard, selectedRow, selectedCol, row, col, newCastlingRights);
           } else {
             setBoard(newBoard);
-            setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+            setCurrentPlayer(nextPlayer);
             setCastlingRights(newCastlingRights);
           }
 
@@ -116,6 +135,21 @@ export const useMoveHandler = ({
     // Update castling rights
     const newCastlingRights = updateCastlingRights(activeCastlingRights, movingPiece, fromRow, fromCol);
 
+    // Detect move type for sound effects
+    const isCapture = board[toRow][toCol] !== null;
+    const nextPlayer = activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
+    const isCheck = isInCheck(newBoard, nextPlayer);
+    const isMateCheck = isCheckmate(newBoard, nextPlayer, newCastlingRights);
+
+    // Play promotion sound
+    playMoveSound({
+      isCapture,
+      isCastle: false,
+      isCheck,
+      isCheckmate: isMateCheck,
+      isPromotion: true
+    });
+
     // Track the move
     setLastMove({ from: [fromRow, fromCol], to: [toRow, toCol] });
 
@@ -123,7 +157,7 @@ export const useMoveHandler = ({
       makeMultiplayerMove(newBoard, fromRow, fromCol, toRow, toCol, newCastlingRights);
     } else {
       setBoard(newBoard);
-      setCurrentPlayer(activeCurrentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+      setCurrentPlayer(nextPlayer);
       setCastlingRights(newCastlingRights);
     }
 

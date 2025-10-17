@@ -18,3 +18,9 @@ export const SQUARE_SIZE = {
   MOBILE: '11vw',
   MOBILE_MAX: 45
 };
+
+// Export piece image utilities
+export * from './pieceImages';
+
+// Export sound effect utilities
+export * from './soundEffects';
